@@ -1,0 +1,1150 @@
+df <- read.csv("oxford_table2.csv")
+install.packages("dplyr")
+install.packages("tidyverse")
+install.packages("ggplot2")
+install.packages("installr")
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(installr)
+library(reshape2)
+
+by_country <- df %>%
+  filter(Date_test <= as.Date("2020-04-13"))%>%
+  group_by(CountryName) %>%
+  summarize(current_cases = max(ConfirmedCases, na.rm = T),
+            School_closing = max(S1_School.closing, na.rm = TRUE),
+            Workplace_closing = max(S2_Workplace.closing, na.rm = TRUE),
+            Public_events = max(S3_Cancel.public.events, na.rm = TRUE),
+            Public_transport = max(S4_Close.public.transport, na.rm = TRUE),
+            Interntal_movement = max(S6_Restrictions.on.internal.movement, na.rm = TRUE),
+            International_travel = max(S7_International.travel.controls, na.rm = TRUE))
+
+by_country2 <- df %>%
+  #filter(Date_test <= as.Date("2020-04-13"))%>%
+  group_by(CountryName) %>%
+  summarize(current_cases = max(ConfirmedCases, na.rm = T),
+            School_closing = max(S1_School.closing, na.rm = TRUE),
+            Workplace_closing = max(S2_Workplace.closing, na.rm = TRUE),
+            Public_events = max(S3_Cancel.public.events, na.rm = TRUE),
+            Public_transport = max(S4_Close.public.transport, na.rm = TRUE),
+            Interntal_movement = max(S6_Restrictions.on.internal.movement, na.rm = TRUE),
+            International_travel = max(S7_International.travel.controls, na.rm = TRUE))
+
+by_country2_internal_movement <- by_country2%>%
+  filter(Interntal_movement== 1 | Interntal_movement == 0)
+write.csv(by_country2_internal_movement, "internal_movement.csv")
+
+by_country2_workplace <- by_country2%>%
+  filter(Workplace_closing == 1 | Workplace_closing == 0)
+write.csv(by_country2_workplace, "workplace.csv")
+
+
+
+
+table_school <- by_country[,1:2]
+table_workplace <- by_country[,c(1,3)]
+table_internal <- by_country[,c(1,4)]
+
+table(by_country$School_closing)
+#must close school
+145/150
+table(by_country$Workplace_closing)
+#must close workplace
+115/150
+table(by_country$Interntal_movement)
+#must internal
+121/144
+table(by_country$Public_events)
+145/151
+table(by_country$Public_transport)
+85/(47+18+85)
+table(by_country$International_travel)
+137/(137+8+2)
+
+
+
+rows1 <- c(round((145/150),2),round((115/150),2),round((121/144),2))
+Column <- c("Mandatory School closing", "Required Workplace closing", "Public events restriction",
+            "Public transport restriction","Restricted internal movement","Banned international travel")
+row3 <- "%"
+
+df3 <- data.frame(percent1 = c(round((145/150),2),round((115/150),2),round(145/151,2),
+                               round(85/(85+18+47),2),round((121/144),2), round(137/(137+2+8),2)),
+                  rest_type = c("Schools", "Workplace", "Public events",
+                                "Public transport", "Internal movement","International travel"))
+
+ggplot(df3, aes(x = rest_type, y = percent1*100))+
+  geom_bar(stat = "identity", fill = "steelblue")+
+  ggtitle("Percentage of countries which implemented restrictions")+
+  theme_minimal()+
+  labs(y = "% of countries", x = "")+
+  scale_y_continuous(breaks = seq(0,110,5))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5,size =15),legend.position = c(.1, .80),
+        axis.text.x = element_text(size = 11, face = "bold"),
+        legend.text = element_text(size = 11, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14))
+
+df$School_YN <- ifelse(df$S1_School.closing == 2, 1, 0)
+df$Workplace_YN <- ifelse(df$S2_Workplace.closing == 2, 1, 0)
+df$Internal_YN <- ifelse(df$S6_Restrictions.on.internal.movement == 2, 1, 0)
+df$Date_test <- as.Date(df$Date, format = "%m/%d/%Y")
+
+by_date2 <- df %>%
+  arrange(Date_test)%>%
+  group_by(Date_test)%>%
+  summarize(Countries_School_restriction = sum(School_YN, na.rm = T),
+            Countires_workplace = sum(Workplace_YN, na.rm = T),
+            Countries_internal = sum(Internal_YN, na.rm = T))
+
+ggplot(by_date2, aes(x = Date_test, y = Countries_School_restriction))+
+  geom_point()
+
+df$is_na_school <- ifelse(is.na(df$S1_School.closing), 1, 0)
+
+by_date3 <- df %>%
+  arrange(Date_test)%>%
+  group_by(Date_test)%>%
+  summarize(Countries_School_restriction_missing = sum(is_na_school, na.rm = T))
+
+ggplot(by_date3, aes(x = Date_test, y = Countries_School_restriction_missing))+
+  geom_point()+
+  scale_x_date(date_breaks = "1 month", date_labels =  "%b %Y")+
+  ggtitle("Missing Values over time")+
+  labs(y = "number of NAs", x = "time")
+
+ggplot(by_date2, aes(Date_test)) + 
+  geom_line(aes(y = Countries_School_restriction, colour = "var0")) + 
+  geom_line(aes(y = Countires_workplace, colour = "var1"))+
+  geom_line(aes(y = Countries_internal, colour = "var2"))+
+  ggtitle("Restrictions in Countries over time")+
+  labs(y = "number of countries with restriction", x = "time")
+
+
+df4 <- melt(by_date2, id = "Date_test", measure = c("Countries_School_restriction","Countires_workplace","Countries_internal"))
+
+ggplot(df4, aes(id, value,colour = variable))+
+  geom_line()
+
+all_restrictions <- df %>%
+  arrange(Date_test)%>%
+  group_by(Date_test)%>%
+  select(S1_School.closing,S2_Workplace.closing, S3_Cancel.public.events,
+         S4_Close.public.transport,S6_Restrictions.on.internal.movement,S7_International.travel.controls)%>%
+  mutate(s1_F = ifelse(S1_School.closing == 2,1,0),
+         s2_F = ifelse(S2_Workplace.closing == 2,1,0),
+         s3_F = ifelse(S3_Cancel.public.events == 2,1,0),
+         s4_F = ifelse(S4_Close.public.transport == 2,1,0),
+         s6_F = ifelse(S6_Restrictions.on.internal.movement == 2,1,0),
+         s7_F = ifelse(S7_International.travel.controls == 3,1,0)) %>%
+  summarize(s1_N = sum(s1_F, na.rm = T),
+            s2_N = sum(s2_F, na.rm = T),
+            s3_N = sum(s3_F, na.rm = T),
+            s4_N = sum(s4_F, na.rm = T),
+            s6_N = sum(s6_F, na.rm = T),
+            s7_N = sum(s7_F, na.rm = T))
+
+#selecting until 6th April cuz missing data
+all_restrictions2 = all_restrictions[1:97,]
+
+restrictions_string = c("School","Workplace","Public Space","Public Transport","Internal Movement","International Travel")
+
+tiff("test.tiff", units="in", width=10, height=5, res=300)
+
+ggplot(all_restrictions2, aes(Date_test)) + 
+  geom_line(aes(y = s1_N,colour = "var0"),size = 1.5)+ 
+  geom_line(aes(y = s2_N,colour = "var1"),size = 1.5)+
+  geom_line(aes(y = s3_N,colour = "var2"),size = 1.5)+
+  geom_line(aes(y = s4_N,colour = "var3"),size = 1.5)+ 
+  geom_line(aes(y = s6_N,colour = "var4"),size = 1.5)+
+  geom_line(aes(y = s7_N,colour = "var5"),size = 1.5)+
+  ggtitle("Restrictions in Countries over time")+
+  labs(y = "Number of countries with restriction", x = "Time")+
+  scale_color_discrete(name = "Legend", labels = restrictions_string)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "5 days", limits = c(as.Date("2020-01-01"),as.Date("2020-04-06")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = c(.1, .80),
+        axis.text.x = element_text(size = 9, face = "bold"),
+        legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14))
+ggsave(filename = "restrictions.png",p)
+
+all_restrictions0 <- df %>%
+  arrange(Date_test)%>%
+  group_by(Date_test)%>%
+  select(S1_School.closing,S2_Workplace.closing, S3_Cancel.public.events,
+         S4_Close.public.transport,S6_Restrictions.on.internal.movement,S7_International.travel.controls)%>%
+  mutate(s1_F = ifelse(S1_School.closing == 2,1,0),
+         s2_F = ifelse(S2_Workplace.closing == 2,1,0),
+         s3_F = ifelse(S3_Cancel.public.events == 2,1,0),
+         s4_F = ifelse(S4_Close.public.transport == 2,1,0),
+         s6_F = ifelse(S6_Restrictions.on.internal.movement == 2,1,0),
+         s7_F = ifelse(S7_International.travel.controls == 3,1,0))%>%
+  select(Date_test,s1_F:s7_F)%>%
+  summarize(s1_N = round(sum(s1_F, na.rm = T)*100/151,0),
+            s2_N = round(sum(s2_F, na.rm = T)*100/151,0),
+            s3_N = round(sum(s3_F, na.rm = T)*100/151,0),
+            s4_N = round(sum(s4_F, na.rm = T)*100/151,0),
+            s6_N = round(sum(s6_F, na.rm = T)*100/151,0),
+            s7_N = round(sum(s7_F, na.rm = T)*100/151,0))
+df6 = all_restrictions0[1:97,]
+
+df7 <- melt(df6, id = "Date_test", measure = c("s1_N","s2_N","s3_N","s4_N","s6_N","s7_N"))
+
+restrictions_string2 = c("School","Workplace","Public Space","Public Transport","Internal Movement","International Travel")
+
+ggplot(df7, aes(x = Date_test, y = value, color = variable))+
+  geom_line(size=1.5)+
+  ggtitle("Restrictions in Countries over time")+
+  labs(size = 2,y = "Total percentage of countries with restriction", x = "Time")+
+  scale_color_discrete(name = "Legend", labels = restrictions_string2)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string2)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "5 days", limits = c(as.Date("2020-01-01"),as.Date("2020-04-06")))+
+  scale_y_continuous(breaks = seq(0,110,10))+
+  theme_get()+
+  #geom_vline(xintercept = as.Date("2020-11-03"))+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = c(.1, .80),
+        axis.text.x = element_text(size = 9, face = "bold"),
+        legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14))
+###
+# -Update on 27th April. 
+# -Trying to get when were different restrictions first introduced - get boxplots person
+# amount of cases (boxplots 6x4, 6 for 6 restrictions and 4 for 4 groups 0-100 cases
+# 100-1000,1000 - 10000)
+# 
+
+df <- read.csv("oxford_table4.csv")
+df$Date_test <- as.Date(df$Date, format = "%m/%d/%Y")
+
+df_x <- df %>%
+  arrange(Date_test)%>%
+  group_by(CountryName, Date_test)%>%
+  select(S1_School.closing,S2_Workplace.closing, S3_Cancel.public.events,
+         S4_Close.public.transport,S6_Restrictions.on.internal.movement,S7_International.travel.controls, ConfirmedCases)%>%
+  mutate(s1_F = ifelse(S1_School.closing == 2,1,0),
+         s2_F = ifelse(S2_Workplace.closing == 2,1,0),
+         s3_F = ifelse(S3_Cancel.public.events == 2,1,0),
+         s4_F = ifelse(S4_Close.public.transport == 2,1,0),
+         s6_F = ifelse(S6_Restrictions.on.internal.movement == 2,1,0),
+         s7_F = ifelse(S7_International.travel.controls == 3,1,0))
+
+
+df_x2 <- df %>%
+  group_by(CountryName, Date_test)%>%
+  select(S1_School.closing,S2_Workplace.closing, S3_Cancel.public.events,
+         S4_Close.public.transport,S6_Restrictions.on.internal.movement,S7_International.travel.controls, ConfirmedCases)%>%
+  mutate(s1_F = ifelse(S1_School.closing == 2,1,0),
+         s2_F = ifelse(S2_Workplace.closing == 2,1,0),
+         s3_F = ifelse(S3_Cancel.public.events == 2,1,0),
+         s4_F = ifelse(S4_Close.public.transport == 2,1,0),
+         s6_F = ifelse(S6_Restrictions.on.internal.movement == 2,1,0),
+         s7_F = ifelse(S7_International.travel.controls == 3,1,0))%>%
+  ungroup()
+df_x3 <- df_x2 %>%
+  select(CountryName, Date_test, ConfirmedCases, contains("F"))
+
+t.first <- df_x3[match(unique(df_x3$s1_F), df_x3$s1_F),]
+
+#za school
+
+df_x4_school <- df_x3[,1:4]
+df_x4_school_r <- df_x4_school %>%
+  group_by(CountryName)%>%
+  filter(s1_F == 1)%>%
+  do(head(., n = 1))
+df_x4_school_r <- na.omit(df_x4_school_r)
+case_cat <- df_x4_school_r$ConfirmedCases
+case_cat[case_cat < 100] <- 1
+case_cat[case_cat >= 100 & case_cat < 1000] <- 2 
+case_cat[case_cat >= 1000 & case_cat < 10000] <- 3 
+case_cat[case_cat > 10000] <- 4
+
+df_x4_school_r$case_cat <- as.factor(case_cat)
+
+### barplot
+
+p1 <- ggplot(df_x4_school_r, aes(x = case_cat))+
+  geom_bar(fill="steelblue")+
+  ggtitle("How many cases for School closure?")+
+  labs(y = "  ", x = "Number of Cases")+
+  scale_x_discrete(labels = c("0-100","100-1000","1000-10000","10000+"))+
+  scale_y_continuous(breaks = seq(0,110,5))+
+  theme_get()+
+  theme(plot.title = element_text(size = 10.5))
+# theme(plot.title = element_text(hjust = 0.5), legend.position = "none",
+#       axis.text.x = element_text(size = 9, face = "bold"),
+#       axis.title.x = element_text(size = 14),
+#       axis.title.y = element_text(size = 14))
+
+## za workplace
+df_x4_worplace <- df_x3%>%
+  select(CountryName:ConfirmedCases, s2_F)
+df_x4_worplace_r <- df_x4_worplace %>%
+  group_by(CountryName)%>%
+  filter(s2_F == 1)%>%
+  do(head(., n = 1))
+df_x4_worplace_r <- na.omit(df_x4_worplace_r)
+case_cat <- df_x4_worplace_r$ConfirmedCases
+case_cat[case_cat < 100] <- 1
+case_cat[case_cat >= 100 & case_cat < 1000] <- 2 
+case_cat[case_cat >= 1000 & case_cat < 10000] <- 3 
+case_cat[case_cat > 10000] <- 4
+
+df_x4_worplace_r$case_cat <- as.factor(case_cat)
+
+
+
+p2 <- ggplot(df_x4_worplace_r, aes(x = case_cat))+
+  geom_bar(fill="steelblue")+
+  ggtitle("How many cases for Workplace closure?")+
+  labs(y = "  ", x = "Number of Cases")+
+  scale_x_discrete(labels = c("0-100","100-1000","1000-10000","10000+"))+
+  scale_y_continuous(breaks = seq(0,110,5))+
+  theme_get()+
+  theme(plot.title = element_text(size = 10.5))
+
+### za public space
+
+df_x4_public <- df_x3%>%
+  select(CountryName:ConfirmedCases, s3_F)
+df_x4_public_r <- df_x4_public %>%
+  group_by(CountryName)%>%
+  filter(s3_F == 1)%>%
+  do(head(., n = 1))
+df_x4_public_r <- na.omit(df_x4_public_r)
+case_cat <- df_x4_public_r$ConfirmedCases
+case_cat[case_cat < 100] <- 1
+case_cat[case_cat >= 100 & case_cat < 1000] <- 2 
+case_cat[case_cat >= 1000 & case_cat < 10000] <- 3 
+case_cat[case_cat > 10000] <- 4
+
+df_x4_public_r$case_cat <- as.factor(case_cat)
+
+
+
+p3 <- ggplot(df_x4_public_r, aes(x = case_cat))+
+  geom_bar(fill="steelblue")+
+  ggtitle("How many cases for Public Events restriction?")+
+  labs(y = "  ", x = "Number of Cases")+
+  scale_x_discrete(labels = c("0-100","100-1000","1000-10000","10000+"))+
+  scale_y_continuous(breaks = seq(0,110,5))+
+  theme_get()+
+  theme(plot.title = element_text(size = 10.5))
+
+### za Public Transport
+
+df_x4_transport <- df_x3%>%
+  select(CountryName:ConfirmedCases, s4_F)
+df_x4_transport_r <- df_x4_transport %>%
+  group_by(CountryName)%>%
+  filter(s4_F == 1)%>%
+  do(head(., n = 1))
+df_x4_transport_r <- na.omit(df_x4_transport_r)
+case_cat <- df_x4_transport_r$ConfirmedCases
+case_cat[case_cat < 100] <- 1
+case_cat[case_cat >= 100 & case_cat < 1000] <- 2 
+case_cat[case_cat >= 1000 & case_cat < 10000] <- 3 
+case_cat[case_cat > 10000] <- 4
+
+df_x4_transport_r$case_cat <- as.factor(case_cat)
+
+
+
+p4 <- ggplot(df_x4_transport_r, aes(x = case_cat))+
+  geom_bar(fill="steelblue")+
+  ggtitle("How many cases for Public transport restriction?")+
+  labs(y = "  ", x = "Number of Cases")+
+  scale_x_discrete(labels = c("0-100","100-1000","1000-10000","10000+"))+
+  scale_y_continuous(breaks = seq(0,110,5))+
+  theme_get()+
+  theme(plot.title = element_text(size = 10.5))
+
+#### za internal mov
+
+df_x4_internal <- df_x3%>%
+  select(CountryName:ConfirmedCases, s6_F)
+df_x4_internal_r <- df_x4_internal %>%
+  group_by(CountryName)%>%
+  filter(s6_F == 1)%>%
+  do(head(., n = 1))
+df_x4_internal_r <- na.omit(df_x4_internal_r)
+case_cat <- df_x4_internal_r$ConfirmedCases
+case_cat[case_cat < 100] <- 1
+case_cat[case_cat >= 100 & case_cat < 1000] <- 2 
+case_cat[case_cat >= 1000 & case_cat < 10000] <- 3 
+case_cat[case_cat > 10000] <- 4
+
+df_x4_internal_r$case_cat <- as.factor(case_cat)
+
+
+
+p5 <- ggplot(df_x4_internal_r, aes(x = case_cat))+
+  geom_bar(fill="steelblue")+
+  ggtitle("How many cases for Internal Movement restriction?")+
+  labs(y = "  ", x = "Number of Cases")+
+  scale_x_discrete(labels = c("0-100","100-1000","1000-10000","10000+"))+
+  scale_y_continuous(breaks = seq(0,110,5))+
+  theme_get()+
+  theme(plot.title = element_text(size = 10.5))
+
+## int travel
+
+df_x4_travel <- df_x3%>%
+  select(CountryName:ConfirmedCases, s7_F)
+df_x4_travel_r <- df_x4_travel %>%
+  group_by(CountryName)%>%
+  filter(s7_F == 1)%>%
+  do(head(., n = 1))
+df_x4_travel_r <- na.omit(df_x4_travel_r)
+case_cat <- df_x4_travel_r$ConfirmedCases
+case_cat[case_cat < 100] <- 1
+case_cat[case_cat >= 100 & case_cat < 1000] <- 2 
+case_cat[case_cat >= 1000 & case_cat < 10000] <- 3 
+case_cat[case_cat > 10000] <- 4
+
+df_x4_travel_r$case_cat <- as.factor(case_cat)
+
+
+
+p6 <- ggplot(df_x4_transport_r, aes(x = case_cat))+
+  geom_bar(fill="steelblue")+
+  ggtitle("How many cases for Public Transport restriction?")+
+  labs(y = "  ", x = "Number of Cases")+
+  scale_x_discrete(labels = c("0-100","100-1000","1000-10000","10000+"))+
+  scale_y_continuous(breaks = seq(0,110,5))+
+  theme_get()+
+  theme(plot.title = element_text(size = 10.5))
+install.packages("gridExtra")
+library(gridExtra)
+grid.arrange(p1,p2,p3,p4,p5,p6, nrow = 2)
+
+#### Restriction by case number
+dat1 <- read.csv("oxford_table3.csv")
+dat1$Date_test <- as.Date(dat1$Date, format = "%m/%d/%Y")
+
+###lets see in updated until when are NAs not dominant
+dat1$is_na_school <- ifelse(is.na(dat1$S1_School.closing), 1, 0)
+dat1$is_na_work <- ifelse(is.na(dat1$S2_Workplace.closing), 1, 0)
+
+
+dat_NAs <- dat1 %>%
+  arrange(Date_test)%>%
+  group_by(Date_test)%>%
+  summarize(Countries_School_restriction_missing = sum(is_na_school, na.rm = T),
+            Countries_work_missing = sum(is_na_work, na.rm = T))
+
+#14th April missing 13 counries, so 13th april wihch is row 104
+
+
+ggplot(dat_NAs, aes(x = Date_test, y = Countries_School_restriction_missing))+
+  geom_point()+
+  scale_x_date(date_breaks = "1 month", date_labels =  "%b %Y")+
+  ggtitle("Missing Values over time")+
+  labs(y = "number of NAs", x = "time")
+
+all <- df %>%
+  arrange(Date_test)%>%
+  group_by(Date_test,CountryName)%>%
+  select(S1_School.closing,S2_Workplace.closing, S3_Cancel.public.events,
+         S4_Close.public.transport,S6_Restrictions.on.internal.movement,S7_International.travel.controls)%>%
+  mutate(s1_F = ifelse(S1_School.closing == 2,1,0),
+         s2_F = ifelse(S2_Workplace.closing == 2,1,0),
+         s3_F = ifelse(S3_Cancel.public.events == 2,1,0),
+         s4_F = ifelse(S4_Close.public.transport == 2,1,0),
+         s6_F = ifelse(S6_Restrictions.on.internal.movement == 2,1,0),
+         s7_F = ifelse(S7_International.travel.controls == 3,1,0))%>%
+  select(Date_test,CountryName,s1_F:s7_F)%>%
+  summarize(s1_N = sum(s1_F, na.rm = T),
+            s2_N = sum(s2_F, na.rm = T),
+            s3_N = sum(s3_F, na.rm = T),
+            s4_N = sum(s4_F, na.rm = T),
+            s6_N = sum(s6_F, na.rm = T),
+            s7_N = sum(s7_F, na.rm = T))%>%
+  group_by(CountryName)%>%
+  summarize(s1_d = sum(s1_N, na.rm = T),
+            s2_d = sum(s2_N, na.rm = T),
+            s3_d = sum(s3_N, na.rm = T),
+            s4_d = sum(s4_N, na.rm = T),
+            s6_d = sum(s6_N, na.rm = T),
+            s7_d = sum(s7_N, na.rm = T))
+
+dat2 = all[1:104,]
+
+dat2_reshaped <- melt(dat2, id = "CountryName", measure = c("s1_d","s2_d","s3_d","s4_d","s6_d","s7_d"))
+
+ggplot(data = dat2_reshaped, aes(x = variable, y = value))+
+  geom_boxplot(aes(fill=variable))+
+  ggtitle("Boxplots for duration of restrictions")+
+  labs(y = "Time (days)", x = "Type of Restriction")+
+  #scale_color_manual(name = "Legend", labels = restrictions_string2)+
+  #scale_fill_manual(labels = restr)
+  scale_x_discrete(labels = restrictions_string2)+
+  scale_y_continuous(breaks = seq(0,110,10))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14))
+
+summary(dat2)
+
+## By country, NAs
+
+sum(is.na(df$S1_School.closing))
+
+df_x5 <- df_x%>%
+  group_by(CountryName)%>%
+  select(S1_School.closing,ConfirmedCases,S2_Workplace.closing, S3_Cancel.public.events,
+         S4_Close.public.transport,S6_Restrictions.on.internal.movement,S7_International.travel.controls, ConfirmedCases)%>%
+  summarize(cases = max(ConfirmedCases, na.rm = T),
+            s1_NAs = sum(is.na(S1_School.closing)),
+            s2_NAs = sum(is.na(S2_Workplace.closing)),
+            s3_NAs = sum(is.na(S3_Cancel.public.events)),
+            s4_NAs = sum(is.na(S4_Close.public.transport)),
+            s6_NAs = sum(is.na(S6_Restrictions.on.internal.movement)),
+            s7_NAs = sum(is.na(S7_International.travel.controls)))
+df_x5_selected <- df_x5 %>%
+  select(CountryName,s1_NAs, cases)%>%
+  arrange(desc(s1_NAs))
+
+x2 <- df_x5_selected[-108,]
+
+plot(df_x5_selected$s1_NAs,df_x5_selected$cases, ylab ="cases")
+hist()
+
+ggplot(x2)+
+  geom_point(mapping = aes(x = s1_NAs, y = cases))+
+  ggtitle("Missing Values vs Number of Cases per country")+
+  labs(y = "Number of Confirmed Cases ", x = "Number of Missing values")
+
+###### STRANA 2
+
+
+all_restrictions2 <- df %>%
+  arrange(Date_test)%>%
+  group_by(Date_test, CountryName)%>%
+  select(ConfirmedCases,S1_School.closing,S2_Workplace.closing, S3_Cancel.public.events,
+         S4_Close.public.transport,S6_Restrictions.on.internal.movement,S7_International.travel.controls)%>%
+  mutate(s1_F = ifelse(S1_School.closing == 2,1,0),
+         s2_F = ifelse(S2_Workplace.closing == 2,1,0),
+         s3_F = ifelse(S3_Cancel.public.events == 2,1,0),
+         s4_F = ifelse(S4_Close.public.transport == 2,1,0),
+         s6_F = ifelse(S6_Restrictions.on.internal.movement == 2,1,0),
+         s7_F = ifelse(S7_International.travel.controls == 3,1,0)) %>%
+  summarize(sum_cases = sum(ConfirmedCases,na.rm = T),
+            s1_N = sum(s1_F, na.rm = T),
+            s2_N = sum(s2_F, na.rm = T),
+            s3_N = sum(s3_F, na.rm = T),
+            s4_N = sum(s4_F, na.rm = T),
+            s6_N = sum(s6_F, na.rm = T),
+            s7_N = sum(s7_F, na.rm = T))%>%
+  ungroup()
+
+### GERMANY
+
+Germany_s1 <- all_restrictions2 %>%
+  filter(CountryName == "Germany")%>%
+  select(Date_test,sum_cases, s1_N)
+Germany_s1 <- Germany_s1[1:104,]
+
+ggplot(Germany_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s1_N),size = 1.5)+ 
+  ggtitle("Epi curve")+
+  labs(y = "Number of Cases", x = "Time")+
+  #scale_color_discrete(name = "Legend", labels = restrictions_string)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "4 days", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),#legend.position = c(.1, .80),
+        axis.text.x = element_text(size = 9, face = "bold"),
+        #legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+ggsave(filename = "restrictions.png",p)
+
+
+### many
+
+all_restrictions3 <- all_restrictions2 %>%
+  filter(Date_test <= as.Date("2020-04-13"), CountryName %in% c("Germany", "United States", "China","South Korea","Italy","United Kingdom","Singapore","France","Spaion"))
+
+g <- ggplot(all_restrictions3, aes(x = Date_test,group = CountryName)) + 
+  geom_line(aes(y = sum_cases, colour = s1_N),size = 1.5)+ 
+  ggtitle(" ")+
+  labs(y = "Number of Cases", x = "Time")+
+  #scale_linetype  #scale_color_discrete(name = "Legend", labels = c("Germany", "United States", "China","South Korea"))+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "4 days", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(size = 9, face = "bold"), legend.position = 0,
+        #legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+
+g
+
+geom_line(aes(linetype=supp))+
+  geom_point()+
+  scale_linetype_manual(values=c("twodash", "dotted"))
+
+
+
+#### STRANA 3
+
+#### TABLE FOR 2Y AXSI GRAPH
+
+df <- read.csv("oxford.csv")
+
+df$Date_test <- as.Date(df$Date, format = "%m/%d/%Y")
+
+all_restrictions <- df %>%
+  arrange(Date_test)%>%
+  group_by(Date_test)%>%
+  select(ConfirmedCases,S1_School.closing,S2_Workplace.closing, S3_Cancel.public.events,
+         S4_Close.public.transport,S6_Restrictions.on.internal.movement,S7_International.travel.controls)%>%
+  mutate(s1_F = ifelse(S1_School.closing == 2,1,0),
+         s2_F = ifelse(S2_Workplace.closing == 2,1,0),
+         s3_F = ifelse(S3_Cancel.public.events == 2,1,0),
+         s4_F = ifelse(S4_Close.public.transport == 2,1,0),
+         s6_F = ifelse(S6_Restrictions.on.internal.movement == 2,1,0),
+         s7_F = ifelse(S7_International.travel.controls == 3,1,0)) %>%
+  summarize(sum_cases = sum(ConfirmedCases,na.rm = T),
+            s1_N = sum(s1_F, na.rm = T),
+            s2_N = sum(s2_F, na.rm = T),
+            s3_N = sum(s3_F, na.rm = T),
+            s4_N = sum(s4_F, na.rm = T),
+            s6_N = sum(s6_F, na.rm = T),
+            s7_N = sum(s7_F, na.rm = T))
+
+## table for schoools
+
+all_restrictions_s1 <- all_restrictions[1:106,1:3]
+
+write.csv(all_restrictions_s1, "School_closing_overtime_overcases.csv")
+
+### table for workplace
+all_restrictions_s2 <- all_restrictions %>%
+  select(Date_test, sum_cases, s2_N)
+
+write.csv(all_restrictions_s2, "Workplacel_closing_overtime_overcases.csv")
+
+
+##### NAs OVER TIME
+df$is_na_school <- ifelse(is.na(df$S1_School.closing), 1, 0)
+
+by_date3 <- df %>%
+  arrange(Date_test)%>%
+  group_by(Date_test)%>%
+  summarize(Countries_School_restriction_missing = sum(is_na_school, na.rm = T))
+
+ggplot(by_date3, aes(x = Date_test, y = Countries_School_restriction_missing))+
+  geom_point()+
+  scale_x_date(date_breaks = "1 month", date_labels =  "%b %Y")+
+  ggtitle("Missing Values over time")+
+  labs(y = "number of NAs", x = "time")
+
+
+###### STRANA 4
+
+install.packages("gridExtra")
+library(gridExtra)
+
+#Germany
+
+Germany_s1 <- all_restrictions2 %>%
+  filter(CountryName == "Germany")%>%
+  select(Date_test,sum_cases, s1_N)
+Germany_s1 <- Germany_s1[1:104,]
+
+p1 <- ggplot(Germany_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s1_N),size = 1.5)+ 
+  ggtitle("Epi curve for Germany")+
+  labs(y = "Number of Cases", x = "Time")+
+  #scale_color_discrete(name = "Legend", labels = restrictions_string)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  #scale_y_continuous(breaks = 10000, limits = c(0, 1500000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        #legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+
+## USA
+
+USA_s1 <- all_restrictions2 %>%
+  filter(CountryName == "United States")%>%
+  select(Date_test,sum_cases, s2_N, s6_N)
+USA_s1 <- USA_s1[1:104,]
+
+p1a <- ggplot(USA_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s2_N),size = 1.5)+ 
+  ggtitle("USA - Workplace Closure")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 10000, limits = c(0, 1500000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  annotate("pointrange", x = as.Date("2020-03-19"), y = 9415, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-02-19"), y = 551000, label = "19th March; Cases: 9415 ")
+
+p1b <- ggplot(USA_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s6_N),size = 1.5)+ 
+  ggtitle("USA - Internal Movement")+
+  labs(y = "Number of Cases", x = "Time")+
+  #scale_color_discrete(name = "Legend", labels = restrictions_string)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  scale_y_continuous(breaks = 10000, limits = c(0, 1500000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        #legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  annotate("pointrange", x = as.Date("2020-03-19"), y = 9415, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-02-19"), y = 551000, label = "19th March; Cases: 9415 ")
+
+
+
+
+
+## Italy
+
+Italy_s1 <- all_restrictions2 %>%
+  filter(CountryName == "Italy")%>%
+  select(Date_test,sum_cases, s1_N)
+Italy_s1 <- Italy_s1[1:104,]
+
+p2 <- ggplot(Italy_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s1_N),size = 1.5)+ 
+  ggtitle("Epi curve for Italy")+
+  labs(y = "Number of Cases", x = "Time")+
+  #scale_color_discrete(name = "Legend", labels = restrictions_string)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  #scale_y_continuous(breaks = 10000, limits = c(0, 1500000))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        #legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+
+### China
+
+China_s1 <- all_restrictions2 %>%
+  filter(CountryName == "China")%>%
+  select(Date_test,sum_cases, s1_N)
+China_s1 <- China_s1[1:104,]
+
+p7 <- ggplot(China_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s1_N),size = 1.5)+ 
+  ggtitle("Epi curve for China")+
+  labs(y = "Number of Cases", x = "Time")+
+  #scale_color_discrete(name = "Legend", labels = restrictions_string)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  #scale_y_continuous(breaks = 10000, limits = c(0, 1500000))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        #legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+
+## Spain
+
+Spain_s1 <- all_restrictions2 %>%
+  filter(CountryName == "Spain")%>%
+  select(Date_test,sum_cases, s1_N)
+Spain_s1 <- Spain_s1[1:104,]
+
+p3 <-ggplot(Spain_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s1_N),size = 1.5)+ 
+  ggtitle("Epi curve for Spain")+
+  labs(y = "Number of Cases", x = "Time")+
+  #scale_color_discrete(name = "Legend", labels = restrictions_string)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  #scale_y_continuous(breaks = 10000, limits = c(0, 1500000))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        #legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+
+# South Korea
+
+
+SouthKorea_s1 <- all_restrictions2 %>%
+  filter(CountryName == "South Korea")%>%
+  select(Date_test,sum_cases, s1_N)
+SouthKorea_s1 <- SouthKorea_s1[1:104,]
+
+p8 <- ggplot(SouthKorea_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s1_N),size = 1.5)+ 
+  ggtitle("Epi curve for SouthKorea")+
+  labs(y = "Number of Cases", x = "Time")+
+  #scale_color_discrete(name = "Legend", labels = restrictions_string)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  #scale_y_continuous(breaks = 10000, limits = c(0, 1500000))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        #legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+
+
+#### France
+
+
+France_s1 <- all_restrictions2 %>%
+  filter(CountryName == "France")%>%
+  select(Date_test,sum_cases, s1_N)
+France_s1 <- France_s1[1:104,]
+
+p6 <- ggplot(France_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s1_N),size = 1.5)+ 
+  ggtitle("Epi curve for France")+
+  labs(y = "Number of Cases", x = "Time")+
+  #scale_color_discrete(name = "Legend", labels = restrictions_string)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  #scale_y_continuous(breaks = 10000, limits = c(0, 1500000))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        #legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+
+
+#### UK
+
+
+UnitedKingdom_s1 <- all_restrictions2 %>%
+  filter(CountryName == "United Kingdom")%>%
+  select(Date_test,sum_cases, s1_N)
+UnitedKingdom_s1 <- UnitedKingdom_s1[1:104,]
+
+p5 <- ggplot(UnitedKingdom_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s1_N),size = 1.5)+ 
+  ggtitle("Epi curve for United Kingdom")+
+  labs(y = "Number of Cases", x = "Time")+
+  #scale_color_discrete(name = "Legend", labels = restrictions_string)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  #scale_y_continuous(breaks = 10000, limits = c(0, 1500000))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        #legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+
+
+### Singapore
+
+Singapore_s1 <- all_restrictions2 %>%
+  filter(CountryName == "Singapore")%>%
+  select(Date_test,sum_cases, s1_N)
+
+Singaporen_s1 <- Singapore_s1[1:104,]
+
+p9 <- ggplot(Singapore_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s1_N),size = 1.5)+ 
+  ggtitle("Epi curve for Singapore")+
+  labs(y = "Number of Cases", x = "Time")+
+  #scale_color_discrete(name = "Legend", labels = restrictions_string)+
+  #scale_linetype_discrete(name = "Legend",labels = restrictions_string)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  #scale_y_continuous(breaks = 10000, limits = c(0, 1500000))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        #legend.text = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+p9
+
+grid.arrange(p1,p2,p3,p4,p5,p6,p7,p8,p9, nrow = 3)
+
+##### STRANA 5
+Italy_s1 <- all_restrictions2 %>%
+  filter(CountryName == "Italy")%>%
+  select(Date_test,sum_cases, s2_N, s6_N)
+Italy_s1 <-Italy_s1[1:104,]
+
+p2a <- ggplot(Italy_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s2_N),size = 1.5)+ 
+  ggtitle("Italy - Workplace Closure")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 1000, limits = c(0, 200000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+        
+  annotate("pointrange", x = as.Date("2020-02-22"), y = 17, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-02-01"), y = 21000, label = "22nd Feb Cases: 17")
+
+p2a
+
+p2b <- ggplot(Italy_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s6_N),size = 1.5)+ 
+  ggtitle("Italy - Internal Movement")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 1000, limits = c(0, 200000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  
+  annotate("pointrange", x = as.Date("2020-02-21"), y = 13, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-02-01"), y = 21000, label = "21st Feb Cases: 3")
+p2b
+#### Spain
+
+Spain_s1 <- all_restrictions2 %>%
+  filter(CountryName == "Spain")%>%
+  select(Date_test,sum_cases, s2_N, s6_N)
+Spain_s1 <-Spain_s1[1:104,]
+
+p3a <- ggplot(Spain_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s2_N),size = 1.5)+ 
+  ggtitle("Spain - Workplace Closure")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 1000, limits = c(0, 200000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  annotate("pointrange", x = as.Date("2020-03-14"), y = 4231, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-02-01"), y = 21000, label = "14th Mar; Cases: 4231")
+
+p3a
+p3b <- ggplot(Spain_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s6_N),size = 1.5)+ 
+  ggtitle("Spain - Internal Movement")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 1000, limits = c(0, 200000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  annotate("pointrange", x = as.Date("2020-03-14"), y = 4231, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-03-01"), y = 21000, label = "22nd Feb Cases: 4231")
+
+
+p3b
+### China
+
+China_s1 <- all_restrictions2 %>%
+  filter(CountryName == "China")%>%
+  select(Date_test,sum_cases, s2_N, s6_N)
+China_s1 <-China_s1[1:104,]
+
+p4a <- ggplot(China_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s2_N),size = 1.5)+ 
+  ggtitle("China - Workplace Closure")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 1000, limits = c(0, 200000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  annotate("pointrange", x = as.Date("2020-01-26"), y = 1988, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-03-01"), y = 21000, label = "26th Jan; Cases: 1988")
+
+p4a
+p4b <- ggplot(China_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s6_N),size = 1.5)+ 
+  ggtitle("China - Internal Movement")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 1000, limits = c(0, 200000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  annotate("pointrange", x = as.Date("2020-01-23"), y = 623, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-03-01"), y = 21000, label = "23rd Jan; Cases: 1988")
+
+p4b
+#### SK
+
+args(seq)
+
+SouthKorea_s1 <- all_restrictions2 %>%
+  filter(CountryName == "Singapore")%>%
+  select(Date_test,sum_cases, s2_N, s6_N)
+SouthKorea_s1 <-SouthKorea_s1[1:104,]
+
+p5a <- ggplot(SouthKorea_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s2_N),size = 1.5)+ 
+  ggtitle("South Korea - Workplace Closure")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = seq(10000,10), limits = c(0, 200000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  annotate("pointrange", x = as.Date("2020-03-22"), y = 8897, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-03-01"), y = 21000, label = "22nd Mar; Cases: 8897")
+p5a
+
+p5b <- ggplot(SouthKorea_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s6_N),size = 1.5)+ 
+  ggtitle("South Korea - Internal Movement")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 1000, limits = c(0, 20000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  annotate("pointrange", x = as.Date("2020-03-21"), y = 8799, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-03-01"), y = 21000, label = "21st Mar; Cases: 8799")
+
+#### Singapore
+
+
+Singapore_s1 <- all_restrictions2 %>%
+  filter(CountryName == "Singapore")%>%
+  select(Date_test,sum_cases, s2_N, s6_N)
+Singapore_s1 <-Singapore_s1[1:104,]
+
+p6a <- ggplot(Singapore_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s2_N),size = 1.5)+ 
+  ggtitle("Singapore - Workplace Closure")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 100)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  annotate("pointrange", x = as.Date("2020-04-07"), y = 1375, ymin = 0, ymax = 0, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-03-01"), y = 21000, label = "7th Apr; Cases: 1375")
+p6a
+
+p6b <- ggplot(Singapore_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s6_N),size = 1.5)+ 
+  ggtitle("Singapore - Internal Movement")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 100)+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+  #annotate("pointrange", x = as.Date("2020-01-23"), y = 623, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  #annotate("text", x = as.Date("2020-03-01"), y = 21000, label = "23rd Jan; Cases: 1988")
+p6b
+
+## Germany
+
+Germany_s1 <- all_restrictions2 %>%
+  filter(CountryName == "Germany")%>%
+  select(Date_test,sum_cases, s2_N, s6_N)
+Germany_s1 <-Germany_s1[1:104,]
+
+p7a <- ggplot(Germany_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s2_N),size = 1.5)+ 
+  ggtitle("Germany - Workplace Closure")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 1000, limits = c(0, 200000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))
+
+p7b <- ggplot(Germany_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s6_N),size = 1.5)+ 
+  ggtitle("Germany - Internal Movement")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 1000, limits = c(0, 200000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  
+  annotate("pointrange", x = as.Date("2020-03-20"), y = 14138, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-02-01"), y = 21000, label = "20th Mar Cases:14138")
+
+
+### France
+
+France_s1 <- all_restrictions2 %>%
+  filter(CountryName == "France")%>%
+  select(Date_test,sum_cases, s2_N, s6_N)
+France_s1 <-France_s1[1:104,]
+
+p8a <- ggplot(France_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s2_N),size = 1.5)+ 
+  ggtitle("France - Workplace Closure")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 1000, limits = c(0, 200000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  
+  annotate("pointrange", x = as.Date("2020-03-17"), y = 6633, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-02-01"), y = 21000, label = "17th Mar Cases: 6633")
+
+
+p8b <- ggplot(France_s1, aes(Date_test)) + 
+  geom_line(aes(y = sum_cases, colour = s6_N),size = 1.5)+ 
+  ggtitle("France - Internal Movement")+
+  labs(y = "Number of Cases", x = "Time")+
+  scale_y_continuous(breaks = 1000, limits = c(0, 200000))+
+  scale_x_date(date_labels = "%b%d", date_breaks = "1 month", limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+  theme_get()+
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+        axis.text.x = element_text(size = 9, face = "bold"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(siz = 14))+
+  
+  annotate("pointrange", x = as.Date("2020-03-17"), y = 6633, ymin = 0, ymax = 10000000, colour = "red", size = 1)+
+  annotate("text", x = as.Date("2020-02-01"), y = 21000, label = "17th Mar Cases: 6633")
+
+grid.arrange(p4a,p5a,p6a,p7a,p2a,p3a,p8a,p1a, nrow = 2)
+grid.arrange(p4b,p5b,p6b,p7b,p2b,p3b,p8b,p1b, nrow = 2)
