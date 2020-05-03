@@ -1,0 +1,91 @@
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(reshape2)
+library(gridExtra)
+
+
+#### Funckija radi
+# treba popraviti da izbaci nesto drugo kada restrikcije nema
+# treba popraviti grid.arrange da radi
+
+df <- read.csv("oxford_table4.csv")
+df$Date_test <- as.Date(df$Date, format = "%m/%d/%Y")
+
+all_restrictions2 <- df %>%
+  arrange(Date_test)%>%
+  group_by(Date_test, CountryName)%>%
+  select(ConfirmedCases,S1_School.closing,S2_Workplace.closing, S3_Cancel.public.events,
+         S4_Close.public.transport,S6_Restrictions.on.internal.movement,S7_International.travel.controls)%>%
+  mutate(s1_F = ifelse(S1_School.closing == 2,1,0),
+         s2_F = ifelse(S2_Workplace.closing == 2,1,0),
+         s3_F = ifelse(S3_Cancel.public.events == 2,1,0),
+         s4_F = ifelse(S4_Close.public.transport == 2,1,0),
+         s6_F = ifelse(S6_Restrictions.on.internal.movement == 2,1,0),
+         s7_F = ifelse(S7_International.travel.controls == 3,1,0)) %>%
+  summarize(sum_cases = sum(ConfirmedCases,na.rm = T),
+            s1_N = sum(s1_F, na.rm = T),
+            s2_N = sum(s2_F, na.rm = T),
+            s3_N = sum(s3_F, na.rm = T),
+            s4_N = sum(s4_F, na.rm = T),
+            s6_N = sum(s6_F, na.rm = T),
+            s7_N = sum(s7_F, na.rm = T))%>%
+  ungroup()%>%
+  select(Date_test,CountryName,sum_cases, s2_N, s6_N)
+
+USA_s1 <- all_restrictions2 %>%
+  filter(CountryName == "United States")%>%
+  select(Date_test,sum_cases, s2_N, s6_N)%>%
+  distinct(s2_N, .keep_all = TRUE)
+
+p1 <- "Italy"
+
+x1 <- all_restrictions2 %>%
+  filter(CountryName == p1)%>%
+  slice(1:105)
+x2 <- x1%>%
+  distinct(s2_N, .keep_all = TRUE)
+
+x2$sum_cases[x2$s2_N == 1]
+
+USA_s1$Date_test[USA_s1$s2_N == "1"] - 30
+USA_s1 <- USA_s1[1:104,]
+
+
+## simpler version
+
+wk2 <- function(country_name2){
+  x1 <- all_restrictions2 %>%
+    filter(CountryName == country_name2)%>%
+    slice(1:105)
+  x2 <- x1%>%
+    distinct(s2_N, .keep_all = TRUE)
+  x3 <- x1[105:105,]
+  x3_v <- x3$sum_cases
+  
+  ggplot(x1, aes(Date_test))+
+    geom_line(aes(y = sum_cases, colour = s2_N),size = 1.5)+ 
+    ggtitle(paste0(country_name2," - Workplace Closure"))+
+    labs(y = "Number of Cases", x = "Time")+
+    #scale_y_continuous(breaks = 1000, limits = c(0, max(x1$sum_cases)))
+    scale_x_date(date_labels = "%b%d", date_breaks = "1 month",limits = c(as.Date("2020-01-01"),as.Date("2020-04-13")))+
+    theme_get()+
+    theme(plot.title = element_text(hjust = 0.5),legend.position = "none",
+    axis.text.x = element_text(size = 9, face = "bold"),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(siz = 14))+
+    annotate("pointrange", x = as.Date(x2$Date_test[x2$s2_N == "1"]),
+           y = x2$sum_cases[x2$s2_N == "1"], ymin = x2$sum_cases[x2$s2_N == "1"],
+           ymax = x2$sum_cases[x2$s2_N == "1"], colour = "red", size = 1)+
+    annotate("text", x = as.Date("2020-01-07"), y = x3_v,
+    label = paste0(x2$Date_test[x2$s2_N == "1"]," ; Cases: " ,x2$sum_cases[x2$s2_N == "1"]))
+}
+wk2("Italy")
+wk2("Serbia")
+c = c("Germany","Italy","Spain","United States","United Kingdom","France",
+      "South Korea","China","Japan")
+gr2 <- lapply(c,wk2)
+
+lenc <- length(gr2)
+nCol <- floor(sqrt(lenc))
+do.call("grid.arrange", c(gr2, ncol = nCol))
